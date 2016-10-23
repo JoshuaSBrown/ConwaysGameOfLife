@@ -1,0 +1,15 @@
+Setting File conways_input.pgm.
+Setting print iterations 100.
+Setting Iterations 300.
+Setting ghost count 4.
+Opening file conways_input.pgm
+conways_input.pgm: P5 900 900 255 
+width 900 grid_c 1 width mod grid_c 0
+height 900 grid_r 4 height mod grid_r 0
+Rank 0 sub col 900 my col 0 sub row 225 my row 0
+Rank 0 start x 0 start y 0
+sub_row 225 sub_col 900 above_g 0 below_g 4 sub_row 225 sub_col 900 above_g 0 below_g 4 sub_row 225 sub_col 900 above_g 0 below_g 4 
+Iteration      0 Global sum  25301 local sum   6216
+Iteration    100 Global sum  23284 Local sum   7421
+Iteration    200 Global sum  22557 Local sum   6316
+Iteration    300 Global sum  22241

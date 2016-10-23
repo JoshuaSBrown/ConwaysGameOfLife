@@ -1,0 +1,11 @@
+#!/bin/bash
+
+make clean
+rm -f file_num*
+rm -f test6_midterm_matrix
+rm -f test5_midterm_matrix
+rm -f test4_midterm_matrix
+rm -f test3_midterm_matrix
+rm -f test2_midterm_matrix
+rm -f test_midterm_matrix
+make

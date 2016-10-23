@@ -1,0 +1,506 @@
+/*
+ * The pgm_read code was initially provided by Micheal Oberg and
+ * has beeen edited. 
+ * 
+ * 
+ */
+
+
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <popt.h>
+#include <stdbool.h>
+
+#include "../MIDTERM_CONSTANTS/midterm_constants.h"
+#include "../MIDTERM_MATRIX/midterm_matrix.h"
+#include "../MIDTERM_PPRINTF/midterm_pprintf.h"
+#include "midterm_io.h"
+
+int options(int argc, char **argv){
+
+	/* Local Flag */
+	bool flag_file = false;
+
+	/* Initialize Values */
+	verbose = false;
+	send_recv_sync = false;
+
+	init_file = (char *) malloc(sizeof(char)*50);
+	/* Initializeing matrix so that it will
+     * divide up among the processors evenly
+     * with a two by two matrix for each proc
+     */
+
+	init_rows = num_proc*2;
+	init_cols = num_proc*2;
+	init_iter = 10;
+	init_print = 0;
+
+    poptContext POPT_Context;
+    char        POPT_Ret;
+
+    struct poptOption optionsTable[] =
+    {
+        { "verbose"      , 'v' , POPT_ARG_NONE   , 0           , 1 , "Verbose Output"                  , 0 },
+        { "rows"         , 'r' , POPT_ARG_INT    , &init_rows  , 2 , "Number of rows of matrix"        , 0 },
+        { "cols"         , 'c' , POPT_ARG_INT    , &init_cols  , 3 , "Number of cols of matrix"        , 0 },
+        { "block"        , 'b' , POPT_ARG_NONE   , 0           , 4 , "Use block implementation"        , 0 },
+        { "checkerboard" , 'g' , POPT_ARG_NONE   , 0           , 5 , "Use checkerboard implementation" , 0 },
+        { "synchronous"  , 's' , POPT_ARG_NONE   , 0           , 6 , "Use synchronous communication"   , 0 },
+        { "asynchronous" , 'a' , POPT_ARG_NONE   , 0           , 7 , "Use asynchronous communication"  , 0 },
+        { "iterations"   , 'i' , POPT_ARG_INT    , &init_iter  , 8 , "Number of iterations"            , 0 },
+        { "print"        , 'p' , POPT_ARG_INT    , &init_print , 9 , "Number of iterations per print " , 0 },
+        { "file"         , 'f' , POPT_ARG_STRING , &init_file  , 10, "Input file"                      , 0 },
+        { "help"         , 'h' , POPT_ARG_NONE   , 0           , 11, "Help"                            , 0 },
+        POPT_AUTOHELP
+        {NULL, '\0', 0, NULL, 0}
+    };
+
+    POPT_Context = poptGetContext(NULL, argc, (const char**) argv, optionsTable, 0);
+    poptSetOtherOptionHelp(POPT_Context, "[ Try --help for a more detailed description of the options]");
+
+
+    while((POPT_Ret = poptGetNextOpt(POPT_Context)) >=0){
+        switch(POPT_Ret){
+            case 1:
+                printf("Verbose output set.\n");
+                fflush(NULL);
+                verbose = true;
+                break;
+            case 2:
+                printf("Rows set %d.\n",init_rows);
+                fflush(NULL);
+                break;
+            case 3:
+                printf("Cols set %d.\n",init_cols);
+                fflush(NULL);
+                break;
+            case 4:
+                printf("Using block algorithm.\n");
+				fflush(NULL);
+                break;
+            case 5:
+                printf("Using checkerboard algorithm.\n");
+                fflush(NULL);
+                break;
+            case 6:
+                printf("Using synchronous communication.\n");
+								send_recv_sync = true;
+								fflush(NULL);
+                break;
+            case 7:
+                printf("Using asynchronous communication.\n");
+                fflush(NULL);
+                break;
+            case 8:
+                printf("Setting Iterations %d.\n",init_iter);
+                fflush(NULL);
+                break;
+            case 9:
+								printf("Setting print iterations %d.\n",init_print);
+								fflush(NULL);
+                break;
+            case 10:
+                printf("Setting File %s.\n",init_file);
+                fflush(NULL);
+								flag_file = true;
+                break;
+            case 11:
+                print_help_message();
+                fflush(NULL);
+                break;
+       }
+
+    }
+
+    if(verbose && my_rank==0){
+        printf("\n");
+        printf("If values were not set will use default.\n");
+        printf("Verbose option %d\n", verbose   );
+        printf("Rows           %d\n", init_rows );
+        printf("Cols           %d\n", init_cols );
+        printf("Iterations     %d\n", init_iter );
+    }
+
+	/* Check inputs */
+	if(init_rows!=init_cols){
+		fprintf(stderr,"ERROR rows and cols must be equal\n");
+		exit(1);
+	}
+	if(init_rows<=0){
+		fprintf(stderr,"ERROR both rows and columns must have at least size 1\n");
+		exit(1);
+	}
+	if(init_rows%num_proc!=0){
+		fprintf(stderr,"ERROR num of processors must divide rows and columns up evenly.\n");
+		fprintf(stderr,"Suggestions include rows and columns of size %d or %d\n",
+                      (init_rows/num_proc)*num_proc,(init_rows/num_proc)*(num_proc+1));
+		exit(1);
+	}
+
+	if(flag_file==false){
+		fprintf(stderr,"ERROR no input file has been specified\n");
+		exit(1);
+	}
+
+    if(POPT_Ret < -1){
+        fprintf(stderr,"%s: %s\n",
+        poptBadOption(POPT_Context,POPT_BADOPTION_NOALIAS),poptStrerror(POPT_Ret));
+        return 1;
+    }
+	return 0;
+}
+
+/*------------------------------------------------------------------
+ * Function:    print_help_message
+ * Purpose:     Display help message to the screen
+ */
+
+void print_help_message(void){
+
+    printf("\n");
+    printf("This code is designed to execute Conway's Game of Life in parallel or serial.\n");
+    printf("The following values can be set to choose the size of the matrix \n");
+    printf(" * rows       - Total number of rows\n");
+    printf(" * cols       - Total number of cols\n");
+	printf(" * iterations - Total number of iterations\n");
+    printf("\n");
+    printf("The options are optional default values exist for each parameter:\n");
+    printf(" * rows       = 2*num_proc\n");
+    printf(" * cols       = 2*num_proc\n");
+	printf(" * iterations = 10\n");
+    printf("\n");
+    printf("To run the code use the following format\n");
+    printf("\n");
+    printf("mpiexec -np [num] ./executable [option] [arg]\n");
+    printf("\n");
+    printf("Where [num] is the number of processors\n");
+    printf("\n");
+    printf("Where [option] can be any one of the following or all of them:\n");
+    printf("\n");
+    printf(" -h     --help         To display help message no argument is required\n");
+    printf(" -v     --verbose      To display additional messages during run no argument is required\n");
+    printf(" -r     --rows         Specify the number of rows\n");
+    printf(" -c     --cols         Specify the number of cols\n");
+    printf(" -b     --block        Use the block implementation, world divided up into panels\n");
+    printf(" -g     --checkerboard Use checkerboard implementation, world divided up into checkerboard pattern\n");
+    printf(" -s     --synchronous  Use synchronous communication\n");
+    printf(" -a     --asynchronous Use asynchronous communication\n");
+    printf(" -i     --iterations   Specify the number of iterations\n");
+    printf(" -f     --file         Specify the input file name\n");
+    printf("\n");
+
+}
+
+bool read_pgm(matrix * mat_a, matrix * mat_b){
+
+	pp_set_banner("pgm:readpgm");
+
+	/* Open the file */
+	if(my_rank==0){
+		pprintf( "Opening file %s\n", init_file );
+	}
+	FILE *fp = fopen( init_file, "r");
+	
+	if( !fp ){
+		pprintf( "Error: The file '%s' could not be opened.\n", init_file );
+		return false;
+	}
+
+	if(*mat_a!=NULL){
+		fprintf(stderr,"ERROR mat_a should be initialized to NULL before passing"
+                       " to readpgm\n");
+		return false;
+	}
+	
+	if(*mat_b!=NULL){
+		fprintf(stderr,"ERROR mat_b should be initialized to NULL before passing"
+                       " to readpgm\n");
+		return false;
+	}
+	/* Read the PGM header, which looks like this:
+	 *  |P5        magic version number
+	 *  |900 900       width height
+	 *  |255         depth
+	 */	
+	char header[10];
+	int width, height, depth;
+	int rv = fscanf(fp, "%6s\n%i %i\n%i\n",header, &width, &height, &depth);
+	if( rv!= 4){
+		if(my_rank==0){
+			pprintf("Error: The file '%s' did not have a valid PGM header\n",
+					init_file);
+		}
+		return false;
+	}
+	if( my_rank==0 ){
+		pprintf("%s: %s %i %i %i\n",init_file, header, width, height, depth );
+	}
+	/* Make sure the header is valid */
+	if( strcmp( header, "P5") ){
+		if(my_rank==0){
+			pprintf("Error: PGM file is not a valid P5 pixmap.\n");
+		}
+		return false;
+	}
+
+	if( depth != 255 ){
+		if(my_rank==0){
+			pprintf("Error: PGM file has depth=%i, require depth=255.\n",
+                    depth);
+		}
+		return false;  
+	}
+
+	/* Make sure that the width and height are divisible by the number of 
+     * processors in x and y directions */
+
+	if( width % grid_dim_col ){
+
+		if( my_rank==0 ){
+			pprintf( "Error: %i pixel width cannot be divied into %i cols\n",
+                    width, grid_dim_col );
+		}
+		return false;
+	}
+	if( height % grid_dim_row ){
+		if( my_rank==0 ){
+			pprintf( "Error: %i pixel height cannot  be divided into %i rows\n",
+                    height, grid_dim_row );
+		}
+		return false;
+	}
+
+	/* Divide the total image among the local processors */
+	sub_matrix_dim_columns  = width  / grid_dim_col;
+	sub_matrix_dim_rows     = height / grid_dim_row;
+
+	/* Find out where my starting range is */
+	int start_x = sub_matrix_dim_columns * my_grid_col;
+	int start_y = sub_matrix_dim_rows    * my_grid_row;
+	printf("Rank %d sub col %d my col %d sub row %d my row %d\n",my_rank,sub_matrix_dim_columns, my_grid_col, sub_matrix_dim_rows, my_grid_row);	
+	printf("Rank %d start x %d start y %d",my_rank,start_x, start_y);
+	pprintf( "Rank %d Hosting data for x:%03i-%03i y:%03i-%03i\n",
+			my_rank, start_x, start_x + sub_matrix_dim_columns,
+			start_y, start_y + sub_matrix_dim_rows );
+	/* Create the matrix */
+	if( my_rank==0 && my_rank==(num_proc-1)){
+
+		*mat_a = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 0, 0);
+		*mat_b = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 0, 0);
+
+	}else if(my_rank==0){
+		/* rank 0 is at the top of the world thus we do not need a ghost 
+         * row for it's top row */
+		*mat_a = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 0, 1);
+		*mat_b = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 0, 1);
+			
+	}else if(my_rank==(num_proc-1)){
+		/* rank == (num_proc-1) is at the bottom of the world thus we can
+         * omit the bottom row */
+		*mat_a = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 1, 0);
+		*mat_b = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 1, 0);
+	
+	}else{
+		*mat_a = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 1, 1);
+		*mat_b = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 1, 1);
+	}
+
+	/* Read the data from the file. Save the local data to the local matrix. */
+	int b, ll, lx, ly, y, x;
+	for( y=0; y<height; y++){
+		for( x=0; x<width; x++){
+			/* Read the next character */
+			b = fgetc(fp);
+			if( b==EOF ){
+				pprintf("ERROR: Encountered EOF at [%i,%i]\n",y,x);
+				return false;
+			}
+				
+			/* From the PGM, black cells (b=0) are bugs, all other 
+             * cells are background */
+			if(b==0){
+				b=1;
+			}else{
+				b=0;	
+			}
+
+			/* If the character is local then save it */
+
+			if( x>=start_x && x< start_x + sub_matrix_dim_columns &&
+                y>=start_y && y< start_y + sub_matrix_dim_rows    ){
+			if(x==(width-1)){
+//				printf("Rank %d x %d y %d start_x %d start_y %d sub col %d sub row %d\n",
+//					 my_rank,x, y, start_x, start_y, sub_matrix_dim_columns, sub_matrix_dim_rows);
+			}
+				/* Calculate the local pixels */
+				lx = x - start_x ;
+				ly = y - start_y ;
+				//printf("Rank %d lx %d ly %d\n",my_rank,lx,ly);	
+				set_elem_core_matrix(*mat_a,ly,lx,b);
+				set_elem_core_matrix(*mat_b,ly,lx,b);
+			} /* Save local point */
+			
+		} /* For x */
+	} /* for y */
+
+	fclose(fp);
+	pp_reset_banner();
+	return true;
+}
+
+bool write_pgm(matrix * mat_a, int count, int rank){
+
+	pp_set_banner("pgm:write_pgm");
+
+	char file_out[50];
+	sprintf(file_out,"fileout%d.pgm",count);
+	/* Open the file */
+	if(my_rank==0){
+		pprintf( "Opening file %s\n", file_out );
+	}
+	FILE *fp = fopen( file_out, "a");
+	
+	if( !fp ){
+		pprintf( "Error: The file '%s' could not be opened.\n", file_out );
+		return false;
+	}
+
+	if(*mat_a!=NULL){
+		fprintf(stderr,"ERROR mat_a should be initialized to NULL before passing"
+                       " to write_pgm\n");
+		return false;
+	}
+	/* Read the PGM header, which looks like this:
+	 *  |P5        magic version number
+	 *  |900 900       width height
+	 *  |255         depth
+	 */	
+	char header[10];
+	int width, height, depth;
+	int rv = fprintf(fp, "%6s\n%i %i\n%i\n",header, &width, &height, &depth);
+	if( rv!= 4){
+		if(my_rank==0){
+			pprintf("Error: The file '%s' did not have a valid PGM header\n",
+					init_file);
+		}
+		return false;
+	}
+	if( my_rank==0 ){
+		pprintf("%s: %s %i %i %i\n",init_file, header, width, height, depth );
+	}
+	/* Make sure the header is valid */
+	if( strcmp( header, "P5") ){
+		if(my_rank==0){
+			pprintf("Error: PGM file is not a valid P5 pixmap.\n");
+		}
+		return false;
+	}
+
+	if( depth != 255 ){
+		if(my_rank==0){
+			pprintf("Error: PGM file has depth=%i, require depth=255.\n",
+                    depth);
+		}
+		return false;  
+	}
+
+	/* Make sure that the width and height are divisible by the number of 
+     * processors in x and y directions */
+
+	if( width % grid_dim_col ){
+
+		if( my_rank==0 ){
+			pprintf( "Error: %i pixel width cannot be divied into %i cols\n",
+                    width, grid_dim_col );
+		}
+		return false;
+	}
+	if( height % grid_dim_row ){
+		if( my_rank==0 ){
+			pprintf( "Error: %i pixel height cannot  be divided into %i rows\n",
+                    height, grid_dim_row );
+		}
+		return false;
+	}
+
+	/* Divide the total image among the local processors */
+	sub_matrix_dim_columns  = width  / grid_dim_col;
+	sub_matrix_dim_rows     = height / grid_dim_row;
+
+	/* Find out where my starting range is */
+	int start_x = sub_matrix_dim_columns * my_grid_col;
+	int start_y = sub_matrix_dim_rows    * my_grid_row;
+	printf("Rank %d sub col %d my col %d sub row %d my row %d\n",my_rank,sub_matrix_dim_columns, my_grid_col, sub_matrix_dim_rows, my_grid_row);	
+	printf("Rank %d start x %d start y %d",my_rank,start_x, start_y);
+	pprintf( "Rank %d Hosting data for x:%03i-%03i y:%03i-%03i\n",
+			my_rank, start_x, start_x + sub_matrix_dim_columns,
+			start_y, start_y + sub_matrix_dim_rows );
+	/* Create the matrix */
+	if( my_rank==0 && my_rank==(num_proc-1)){
+
+		*mat_a = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 0, 0);
+		*mat_b = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 0, 0);
+
+	}else if(my_rank==0){
+		/* rank 0 is at the top of the world thus we do not need a ghost 
+         * row for it's top row */
+		*mat_a = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 0, 1);
+		*mat_b = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 0, 1);
+			
+	}else if(my_rank==(num_proc-1)){
+		/* rank == (num_proc-1) is at the bottom of the world thus we can
+         * omit the bottom row */
+		*mat_a = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 1, 0);
+		*mat_b = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 1, 0);
+	
+	}else{
+		*mat_a = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 1, 1);
+		*mat_b = new_matrix_row_panel( sub_matrix_dim_rows, sub_matrix_dim_columns, 1, 1);
+	}
+
+	/* Read the data from the file. Save the local data to the local matrix. */
+	int b, ll, lx, ly, y, x;
+	for( y=0; y<height; y++){
+		for( x=0; x<width; x++){
+			/* Read the next character */
+			b = fgetc(fp);
+			if( b==EOF ){
+				pprintf("ERROR: Encountered EOF at [%i,%i]\n",y,x);
+				return false;
+			}
+				
+			/* From the PGM, black cells (b=0) are bugs, all other 
+             * cells are background */
+			if(b==0){
+				b=1;
+			}else{
+				b=0;	
+			}
+
+			/* If the character is local then save it */
+
+			if( x>=start_x && x< start_x + sub_matrix_dim_columns &&
+                y>=start_y && y< start_y + sub_matrix_dim_rows    ){
+			if(x==(width-1)){
+//				printf("Rank %d x %d y %d start_x %d start_y %d sub col %d sub row %d\n",
+//					 my_rank,x, y, start_x, start_y, sub_matrix_dim_columns, sub_matrix_dim_rows);
+			}
+				/* Calculate the local pixels */
+				lx = x - start_x ;
+				ly = y - start_y ;
+				//printf("Rank %d lx %d ly %d\n",my_rank,lx,ly);	
+				set_elem_core_matrix(*mat_a,ly,lx,b);
+				set_elem_core_matrix(*mat_b,ly,lx,b);
+			} /* Save local point */
+			
+		} /* For x */
+	} /* for y */
+
+	fclose(fp);
+	pp_reset_banner();
+	return true;
+}
+//}

@@ -1,0 +1,4 @@
+Timer resolution 1e-09 size of float 4 size of int   4
+Initial Startup 0.035081
+Program Core    12.553 Total iterations 300 Ghost count     4
+Program End     0.002185

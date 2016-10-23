@@ -1,0 +1,22 @@
+Setting File conways_input.pgm.
+Setting print iterations 2.
+Setting Iterations 20.
+Setting ghost count 1.
+Using synchronous communication.
+Using checkerboard algorithm.
+In function my_rank 1 my_grid_col 1 my_grid_row 0
+width 900 grid_c 2 width mod grid_c 0
+height 900 grid_r 2 height mod grid_r 0
+Rank 1 sub col 450 my col 1 sub row 450 my row 0
+Rank 1 start x 450 start y 0
+
+Iteration      0 Local sum   6821
+Iteration      2 Local sum   3895
+Iteration      4 Local sum   3388
+Iteration      6 Local sum   3915
+Iteration      8 Local sum   3520
+Iteration     10 Local sum   4479
+Iteration     12 Local sum   4554
+Iteration     14 Local sum   5357
+Iteration     16 Local sum   4018
+Iteration     18 Local sum   4392

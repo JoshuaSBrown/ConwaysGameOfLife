@@ -1,0 +1,10 @@
+#!/bin/bash
+
+name="fileout"
+
+for i in {0..50}
+do
+	filepgm=$(echo $name$i".pgm")
+	filejpg=$(echo $name$i".jpeg")
+	convert $filepgm $filejpg
+done

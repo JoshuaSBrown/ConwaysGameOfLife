@@ -1,0 +1,26 @@
+Setting File conways_input.pgm.
+Setting print iterations 1.
+[ -1:000] pgm:readpgm    : Opening file conways_input.pgm
+[ -1:001] pgm:readpgm    : conways_input.pgm: P5 900 900 255
+Rank 0 sub col 900 my col 0 sub row 900 my row 0
+Rank 0 start x 0 start y 0[ -1:002] pgm:readpgm    : Rank 0 Hosting data for x:000-900 y:000-900
+Iteration      0 Global sum  25301
+local_bug_sum 16374
+Iteration      1 Global sum  16374
+local_bug_sum 15495
+Iteration      2 Global sum  15495
+local_bug_sum 19497
+Iteration      3 Global sum  19497
+local_bug_sum 13827
+Iteration      4 Global sum  13827
+local_bug_sum 18016
+Iteration      5 Global sum  18016
+local_bug_sum 15892
+Iteration      6 Global sum  15892
+local_bug_sum 25332
+Iteration      7 Global sum  25332
+local_bug_sum 14036
+Iteration      8 Global sum  14036
+local_bug_sum 18799
+Iteration      9 Global sum  18799
+Iteration     10 Global sum  17104
