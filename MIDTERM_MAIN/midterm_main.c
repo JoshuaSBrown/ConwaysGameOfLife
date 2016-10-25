@@ -31,15 +31,11 @@ int main(int argc, char **argv){
 	#endif
 	
 	char timing_file[50];
-	FILE *timing_fid;
 	/* Creating and open timing file if rank 0 */
 	if(my_rank==0){
 		sprintf(timing_file,"timing.txt");
-		timing_fid = fopen(timing_file,"w");
-		fprintf(timing_fid,"Timer resolution %g ",MPI_Wtick());
-		fprintf(timing_fid,"size of float %ld ",sizeof(float));
-		fprintf(timing_fid,"size of int   %ld\n",sizeof(int));
 	}
+	printf("Timer resolution %g ",MPI_Wtick());
 	stat_sum = 0.0;
 	MPI_Barrier(MPI_COMM_WORLD);
 	start = MPI_Wtime();
@@ -51,7 +47,14 @@ int main(int argc, char **argv){
 	int j;
 	int k;
 	float val;
-
+	double total_time_core = 0.0;
+	unsigned long int bytes_core;
+	unsigned long int bytes_border;
+	unsigned long int bytes_message;
+	int ghost_left;
+	int ghost_right;
+	int ghost_above;
+	int ghost_below;
 
 	create_filename_out(my_rank);
 	switch_stdout(filename_out);	
@@ -96,7 +99,7 @@ int main(int argc, char **argv){
 	}
 
 	extra = define_matrix_blockchecker();
-
+	
 	temp1 = &mat_a;
 	temp3 = &extra; 
 	/* Initialize the number of bugs in the system */
@@ -113,6 +116,81 @@ int main(int argc, char **argv){
 	/* END OF CREATING FIRST .pgm FILE                                     */
 	/***********************************************************************/
 
+	/* Determine how many bytes will be sent via message */
+	bytes_message = 0;
+	bytes_border  = 0;	
+	bytes_core    = 0;
+
+        ghost_left  = get_cols_left_ghost_matrix(mat_a);
+        ghost_right = get_cols_right_ghost_matrix(mat_a);
+        ghost_above = get_rows_above_ghost_matrix(mat_a);
+        ghost_below = get_rows_below_ghost_matrix(mat_a);
+	int left  = 0;
+	int above = 0;
+	int below = 0;
+	int right = 0;
+	if(num_proc==1){
+		bytes_message = 0;
+		bytes_border  = 0;
+		bytes_core    = get_total_elems_core_matrix(mat_a);
+		
+	}else{
+		if(block_on){
+
+			if(my_rank==0 || my_rank==(num_proc-1)){
+				bytes_message += (ghost_count)*get_cols_core_matrix(mat_a);
+				bytes_border  += get_cols_core_matrix(mat_a)*ghost_count;
+				bytes_core    += get_cols_core_matrix(mat_a)*(get_rows_core_matrix(mat_a)-ghost_count);	
+			}else{
+				bytes_message += 2*(ghost_count)*get_cols_core_matrix(mat_a);
+				bytes_border  += 2*get_cols_core_matrix(mat_a)*ghost_count;	
+				bytes_core    += get_cols_core_matrix(mat_a)*(get_rows_core_matrix(mat_a)-2*ghost_count);	
+			}
+
+			for(counter=1;counter<ghost_count;counter++){
+				if(my_rank==0 || my_rank==(num_proc-1)){
+					bytes_border += get_cols_core_matrix(mat_a)*(ghost_count+2*counter);
+					bytes_core   += get_cols_core_matrix(mat_a)*(get_rows_core_matrix(mat_a)-ghost_count+counter);	
+				}else{
+					bytes_border += 2*get_cols_core_matrix(mat_a)*(ghost_count+2*counter);
+					bytes_core   += get_cols_core_matrix(mat_a)*(get_rows_core_matrix(mat_a)-2*ghost_count+2*counter);	
+				}
+			}
+		}else{
+
+			bytes_border = (get_total_elems_core_matrix(mat_a))-
+				(get_rows_core_matrix(mat_a)-ghost_above-ghost_below)*
+				(get_cols_core_matrix(mat_a)-ghost_left-ghost_right);
+			bytes_message = bytes_border;
+
+			bytes_core = get_total_elems_core_matrix(mat_a)-bytes_border;
+
+			for(counter=1;counter<ghost_count;counter++){
+
+				if(ghost_above!=0){
+					above = counter;
+				}
+				if(ghost_below!=0){
+					below = counter;
+				}
+				if(ghost_left!=0){
+					left = counter;
+				}
+				if(ghost_right!=0){
+					right = counter;
+				}
+
+				bytes_border += ((get_rows_core_matrix(mat_a)+above+below)*
+						(get_cols_core_matrix(mat_a)+left+right))-
+					(get_rows_core_matrix(mat_a)-ghost_above-ghost_below-above-below)*
+					(get_cols_core_matrix(mat_a)-ghost_left-ghost_right-left-right);
+
+				bytes_core   += (get_rows_core_matrix(mat_a)-ghost_above-ghost_below+above+below)*
+					(get_cols_core_matrix(mat_a)-ghost_left-ghost_right+left+right);
+			}
+
+		}
+	}
 	/***********************************************************************/
 	/* INITIALIZE GHOST ROWS AND COLUMNS BY COMMUNICATING WITH NEIGHBORS   */
 	/***********************************************************************/
@@ -198,9 +276,21 @@ int main(int argc, char **argv){
 
 	finish = MPI_Wtime();
 	elapsed = (finish-start);
-	calculate_statistics(1);
+	calculate_statistics(-1);
 	if(my_rank==0){
-		fprintf(timing_fid,"Initial Startup %g\n",max_t);
+		printf("Initial Startup %g\n",max_t);
+		printf("Message size %ld per %d iterations\n"
+                       ,bytes_message*sizeof(float),ghost_count);
+		printf("Number of floats operated on within core"
+                       " of my world %ld per %d iterations\n"
+                       ,bytes_core*sizeof(float),ghost_count);
+		printf("Number of floats operated on within border"
+                       " of my world %ld per %d iterations\n"
+                       ,bytes_border*sizeof(float),ghost_count);
+		printf("Total number of floats operated on %ld per"
+                       " %d interations\n"
+                       ,(bytes_border+bytes_core)*sizeof(float)
+                       ,ghost_count);
 	}
 	stat_sum = 0.0;
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -303,16 +393,25 @@ int main(int argc, char **argv){
 		/* END OF FILE PRINTER                                          */
 		/****************************************************************/
 		}
+
+		finish = MPI_Wtime();
+		elapsed = (finish-start);
+		calculate_statistics(counter);
+		total_time_core+=elapsed;
+		if(my_rank==0){
+			generate_performance_file(timing_file,counter,bytes_message);
+		}
+               	MPI_Barrier(MPI_COMM_WORLD);
+		start = MPI_Wtime();
+
 	}/* Counter loop */	
 
 	finish = MPI_Wtime();
 	elapsed = (finish-start);
 	calculate_statistics(1);
-	if(my_rank==0){
-		fprintf(timing_fid,"Program Core    %g Total iterations %d"
-                            " Ghost count     %d\n"
-                            ,max_t,init_iter,ghost_count);
-	}
+	printf("Program Core    %g Total iterations %d"
+               " Ghost count     %d\n"
+               ,total_time_core,init_iter,ghost_count);
 	stat_sum = 0.0;
 	MPI_Barrier(MPI_COMM_WORLD);
 	start = MPI_Wtime();
@@ -338,10 +437,7 @@ int main(int argc, char **argv){
 	finish = MPI_Wtime();
 	elapsed = (finish-start);
 	calculate_statistics(1);
-	if(my_rank==0){
-		fprintf(timing_fid,"Program End     %g\n",max_t);
-		fclose(timing_fid);
-	}
+        printf("Program End     %g\n",max_t);
 	#ifdef _MPI_H_
 	MPI_Finalize();
 	#endif	
