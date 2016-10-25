@@ -973,3 +973,16 @@ int calculate_statistics(int iteration){
 double standard_deviation(double mean, int iteration){
 	return pow(pow(max_t-mean,2)/((double)iteration+1.0),(1.0/2.0));
 }
+
+int generate_performance_file( char * file_name, int iter, int bytes){
+	
+	FILE *fp;
+	fp = fopen(file_name,"a+");
+	fprintf(fp,"Iter %8d ",iter);
+	fprintf(fp,"Bytes %8d ",bytes);
+	fprintf(fp,"Mean %12g ",running_mean);
+	fprintf(fp,"Dev %12g ",standard_dev);
+	fprintf(fp,"Error+- %12g\n",margin_err);
+	fclose(fp);
+	return 0;
+}

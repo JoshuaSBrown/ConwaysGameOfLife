@@ -100,4 +100,6 @@ matrix define_matrix_blockchecker(void);
 double standard_deviation(double mean, int iteration);
 
 int calculate_statistics(int iteration);
+
+int generate_performance_file( char * file_name, int iter, int bytes);
 #endif
