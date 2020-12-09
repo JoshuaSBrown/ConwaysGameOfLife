@@ -1,8 +1,0 @@
-#!/bin/bash
-make clean
-rm -f *.txt
-rm -f *.out 
-rm -f timing*
-rm -f file_num*
-rm -f midterm_main
-make

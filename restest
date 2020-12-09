@@ -1,6 +1,0 @@
-#!/bin/bash
-
-cd MIDTERM_MAIN
-make clean
-make 
-
